@@ -1,0 +1,34 @@
+# revised
+import streamlit as st
+import pandas as pd
+
+# Calibration adjustment factor
+CALIBRATION_FACTOR = 0.02
+
+st.title("NFL ELO Probabilities")
+
+@st.cache_data
+def fetch_projections():
+    # Read local CSV instead of live URL
+    df = pd.read_csv("nfl_elo.csv")
+    
+    # Take the latest games per matchup
+    latest = df.groupby('team1').tail(1)
+    
+    projections = latest[['team1','team2','elo1_pre','elo2_pre']].copy()
+    projections.rename(columns={'team1':'home','team2':'away','elo1_pre':'elo_home','elo2_pre':'elo_away'}, inplace=True)
+    
+    # Convert ELO to probability (home team win)
+    projections['model_prob_home'] = 1 / (1 + 10 ** ((projections['elo_away'] - projections['elo_home']) / 400))
+    
+    # Apply calibration adjustment
+    projections['model_prob_home'] = projections['model_prob_home'] * (1 - CALIBRATION_FACTOR) + 0.5 * CALIBRATION_FACTOR
+    
+    projections['model_prob_away'] = 1 - projections['model_prob_home']
+    
+    return projections[['home','away','model_prob_home','model_prob_away']]
+
+projections = fetch_projections()
+
+st.subheader("Elo-Based Probabilities")
+st.dataframe(projections)
